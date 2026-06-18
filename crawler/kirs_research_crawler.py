@@ -11,7 +11,9 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 import httpx
 from bs4 import BeautifulSoup, Tag
 
+from config.report_type_codes import normalize_report_type
 from crawler.config import SELECTORS, Settings
+from crawler.base_crawler import generate_report_id
 from crawler.http import create_ssl_context
 from crawler.models import ReportMetadata
 
@@ -87,16 +89,26 @@ class KirsResearchCrawler:
         if not any((title, company_name, pdf_url)):
             return None
 
+        normalized_type = normalize_report_type(self.settings.report_type, title)
+        standard_id = generate_report_id(
+            "KIRS",
+            stock_code,
+            published_date,
+            title,
+            pdf_url,
+            page_url,
+        )
         return ReportMetadata(
-            report_id=f"kirs-{report_id}",
+            report_id=standard_id if stock_code else f"KIRS_UNKNOWN_{report_id}",
             title=title,
-            securities_firm=author_or_firm,
-            published_date=published_date,
-            report_type=self.settings.report_type,
-            stock_code=stock_code,
-            company_name=company_name,
-            source_url=page_url,
-            pdf_url=pdf_url,
+            source="KIRS",
+            author_org=author_or_firm,
+            published_at=published_date,
+            report_type=normalized_type,
+            ticker=stock_code,
+            company=company_name,
+            original_url=page_url,
+            pdf_url=pdf_url or None,
         )
 
     @staticmethod

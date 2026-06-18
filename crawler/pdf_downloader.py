@@ -60,12 +60,11 @@ class PdfDownloader:
     def _download_once(self, pdf_url: str, temp_path: Path) -> DownloadResult:
         digest = hashlib.sha256()
         first_bytes = b""
+        file_size = 0
 
         with self.client.stream("GET", pdf_url) as response:
             response.raise_for_status()
             content_type = response.headers.get("content-type", "").lower()
-            if "application/pdf" not in content_type:
-                raise PdfDownloadError(f"PDF가 아닌 Content-Type: {content_type or '없음'}")
 
             with temp_path.open("wb") as output:
                 for chunk in response.iter_bytes(chunk_size=64 * 1024):
@@ -74,17 +73,39 @@ class PdfDownloader:
                     if len(first_bytes) < 5:
                         first_bytes += chunk[: 5 - len(first_bytes)]
                     digest.update(chunk)
+                    file_size += len(chunk)
                     output.write(chunk)
                 output.flush()
                 os.fsync(output.fileno())
 
-        if first_bytes != b"%PDF-":
+        valid_pdf = is_pdf_content(content_type, first_bytes)
+        if not valid_pdf:
             temp_path.unlink(missing_ok=True)
-            raise PdfDownloadError("파일 시그니처가 PDF가 아닙니다")
+            raise PdfDownloadError(
+                f"PDF 검증 실패: content_type={content_type or '없음'} signature={first_bytes!r}"
+            )
 
-        return DownloadResult(temp_path=str(temp_path), pdf_hash=digest.hexdigest())
+        return DownloadResult(
+            temp_path=str(temp_path),
+            pdf_hash=digest.hexdigest(),
+            file_size=file_size,
+            content_type=content_type,
+            is_valid_pdf=valid_pdf,
+        )
 
     @staticmethod
     def commit(temp_path: str, final_path: Path) -> None:
         final_path.parent.mkdir(parents=True, exist_ok=True)
         Path(temp_path).replace(final_path)
+
+
+def is_pdf_content(content_type: str, first_bytes: bytes) -> bool:
+    return "application/pdf" in content_type.lower() or first_bytes.startswith(b"%PDF")
+
+
+def calculate_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as input_file:
+        for chunk in iter(lambda: input_file.read(64 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

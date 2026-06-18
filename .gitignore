@@ -10,4 +10,5 @@ db/*.db-wal
 logs/*.log*
 storage/raw_pdfs/**/*.pdf
 storage/raw_pdfs/**/*.part
-
+storage/raw_report_pdfs/**/*.pdf
+storage/raw_report_pdfs/**/*.part

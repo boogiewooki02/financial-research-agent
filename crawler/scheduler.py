@@ -20,8 +20,8 @@ def run_scheduler(settings: Settings) -> None:
             minute=settings.schedule_minute,
             timezone=settings.schedule_timezone,
         ),
-        id="daily_kirs_research_collection",
-        name="Daily KIRS research PDF collection",
+        id="daily_agent_b_collection",
+        name="Daily Agent B data collection",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -29,7 +29,8 @@ def run_scheduler(settings: Settings) -> None:
     )
 
     logger.info(
-        "스케줄러 시작: 매일 %02d:%02d (%s)",
+        "스케줄러 시작: source=%s 매일 %02d:%02d (%s)",
+        settings.source,
         settings.schedule_hour,
         settings.schedule_minute,
         settings.schedule_timezone,
