@@ -209,6 +209,40 @@ class NumericDataRepository:
             )
         return len(rows)
 
+    def upsert_news_rows(self, rows: list[dict]) -> int:
+        with self.database.connect() as connection:
+            connection.executemany(
+                """
+                INSERT OR REPLACE INTO news_metadata (
+                    news_id, ticker, company, title, summary, published_at,
+                    original_url, source, provider, created_at
+                ) VALUES (
+                    :news_id, :ticker, :company, :title, :summary, :published_at,
+                    :original_url, :source, :provider, :created_at
+                )
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def upsert_disclosure_rows(self, rows: list[dict]) -> int:
+        with self.database.connect() as connection:
+            connection.executemany(
+                """
+                INSERT OR REPLACE INTO disclosure_metadata (
+                    disclosure_id, ticker, company, corp_code, report_name,
+                    disclosure_type, disclosed_at, receipt_no, original_url,
+                    source, created_at
+                ) VALUES (
+                    :disclosure_id, :ticker, :company, :corp_code, :report_name,
+                    :disclosure_type, :disclosed_at, :receipt_no, :original_url,
+                    :source, :created_at
+                )
+                """,
+                rows,
+            )
+        return len(rows)
+
 
 class RunRepository:
     def __init__(self, database: Database):
@@ -239,7 +273,9 @@ class RunRepository:
                 UPDATE crawler_runs
                 SET finished_at = ?, status = ?, total_found = ?,
                     downloaded_count = ?, duplicate_count = ?, failed_count = ?,
-                    price_rows_count = ?, macro_rows_count = ?, error_message = ?
+                    price_rows_count = ?, macro_rows_count = ?,
+                    news_rows_count = ?, disclosure_rows_count = ?,
+                    error_message = ?
                 WHERE run_id = ?
                 """,
                 (
@@ -251,6 +287,8 @@ class RunRepository:
                     counts.get("failed", 0),
                     counts.get("price_rows", 0),
                     counts.get("macro_rows", 0),
+                    counts.get("news_rows", 0),
+                    counts.get("disclosure_rows", 0),
                     error_message,
                     run_id,
                 ),

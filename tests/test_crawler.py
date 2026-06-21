@@ -108,6 +108,8 @@ class DatabaseTest(unittest.TestCase):
         self.assertIn("target_price_data", tables)
         self.assertIn("price_data", tables)
         self.assertIn("macro_data", tables)
+        self.assertIn("news_metadata", tables)
+        self.assertIn("disclosure_metadata", tables)
         self.assertIn("crawler_runs", tables)
 
 
@@ -240,6 +242,50 @@ class RepositoryTest(unittest.TestCase):
             repository.insert_report_file(report, result, "storage/report.pdf")
             self.assertIsNotNone(repository.find_by_pdf_url(report.pdf_url))
             self.assertIsNotNone(repository.find_by_sha256("abc"))
+
+    def test_news_and_disclosure_rows_are_saved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(Path(directory) / "reports.db")
+            database.initialize()
+            from db.repositories import NumericDataRepository
+
+            repository = NumericDataRepository(database)
+            news_count = repository.upsert_news_rows(
+                [
+                    {
+                        "news_id": "news-1",
+                        "ticker": "005930",
+                        "company": "삼성전자",
+                        "title": "뉴스",
+                        "summary": "요약",
+                        "published_at": "2026-06-18T00:00:00+00:00",
+                        "original_url": "https://example.com/news",
+                        "source": "NAVER_NEWS",
+                        "provider": "naver",
+                        "created_at": "2026-06-18T00:00:00+00:00",
+                    }
+                ]
+            )
+            disclosure_count = repository.upsert_disclosure_rows(
+                [
+                    {
+                        "disclosure_id": "disc-1",
+                        "ticker": "005930",
+                        "company": "삼성전자",
+                        "corp_code": "00126380",
+                        "report_name": "공시",
+                        "disclosure_type": "A",
+                        "disclosed_at": "2026-06-18",
+                        "receipt_no": "20260618000001",
+                        "original_url": "https://dart.fss.or.kr",
+                        "source": "OPENDART",
+                        "created_at": "2026-06-18T00:00:00+00:00",
+                    }
+                ]
+            )
+
+            self.assertEqual(news_count, 1)
+            self.assertEqual(disclosure_count, 1)
 
 
 class PdfUtilsTest(unittest.TestCase):

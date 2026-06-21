@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, datetime, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 from bs4 import BeautifulSoup
@@ -56,7 +57,151 @@ class MacroDataCollector:
                 date_from,
                 date_to,
             )
+        if self.settings.macro_data_provider == "ecos":
+            rows = EcosMacroProvider(self.settings).collect(
+                indicators,
+                date_from,
+                date_to,
+            )
+            selected = indicators or list(DEFAULT_ECOS_INDICATORS) + ["USD_KRW"]
+            if "USD_KRW" in selected:
+                rows.extend(
+                    NaverMarketIndexProvider(self.settings).collect(
+                        ["USD_KRW"],
+                        date_from,
+                        date_to,
+                    )
+                )
+            return rows
         raise ValueError(f"unsupported macro data provider: {self.settings.macro_data_provider}")
+
+
+@dataclass(frozen=True)
+class EcosIndicator:
+    indicator_id: str
+    indicator_name: str
+    stat_code: str
+    cycle: str
+    item_code: str
+    unit: str
+    frequency: str
+    country: str = "KR"
+
+
+DEFAULT_ECOS_INDICATORS = {
+    "BASE_RATE_KR": EcosIndicator(
+        indicator_id="BASE_RATE_KR",
+        indicator_name="한국 기준금리",
+        stat_code="722Y001",
+        cycle="D",
+        item_code="0101000",
+        unit="%",
+        frequency="daily",
+    ),
+    "KTB_3Y_KR": EcosIndicator(
+        indicator_id="KTB_3Y_KR",
+        indicator_name="국고채 3년 금리",
+        stat_code="817Y002",
+        cycle="D",
+        item_code="010200000",
+        unit="%",
+        frequency="daily",
+    ),
+    "KTB_10Y_KR": EcosIndicator(
+        indicator_id="KTB_10Y_KR",
+        indicator_name="국고채 10년 금리",
+        stat_code="817Y002",
+        cycle="D",
+        item_code="010220000",
+        unit="%",
+        frequency="daily",
+    ),
+    "CPI_KR": EcosIndicator(
+        indicator_id="CPI_KR",
+        indicator_name="한국 소비자물가지수",
+        stat_code="901Y009",
+        cycle="M",
+        item_code="0",
+        unit="index",
+        frequency="monthly",
+    ),
+}
+
+
+class EcosMacroProvider:
+    source = "ECOS"
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+
+    def collect(
+        self,
+        indicators: list[str] | None,
+        date_from: str | None,
+        date_to: str | None,
+    ) -> list[dict]:
+        if not self.settings.ecos_api_key:
+            logger.warning("ECOS_API_KEY가 없어 ECOS 매크로 수집을 건너뜁니다.")
+            return []
+
+        selected = indicators or list(DEFAULT_ECOS_INDICATORS)
+        rows: list[dict] = []
+        with httpx.Client(
+            headers={"User-Agent": self.settings.user_agent},
+            timeout=self.settings.request_timeout_seconds,
+            follow_redirects=True,
+            verify=create_ssl_context(),
+        ) as client:
+            for indicator_id in selected:
+                indicator = DEFAULT_ECOS_INDICATORS.get(indicator_id)
+                if indicator is None:
+                    if indicator_id != "USD_KRW":
+                        logger.warning("지원하지 않는 ECOS 지표입니다: %s", indicator_id)
+                    continue
+                try:
+                    ecos_rows = self._fetch_indicator(client, indicator, date_from, date_to)
+                    if ecos_rows:
+                        rows.append(self._to_macro_row(indicator, ecos_rows[-1]))
+                except Exception as exc:
+                    logger.warning("ECOS 지표 수집 실패: %s - %s", indicator_id, exc)
+        return rows
+
+    def _fetch_indicator(
+        self,
+        client: httpx.Client,
+        indicator: EcosIndicator,
+        date_from: str | None,
+        date_to: str | None,
+    ) -> list[dict]:
+        start, end = _ecos_date_range(indicator.cycle, date_from, date_to)
+        url = (
+            "https://ecos.bok.or.kr/api/StatisticSearch/"
+            f"{self.settings.ecos_api_key}/json/kr/1/100/"
+            f"{indicator.stat_code}/{indicator.cycle}/{start}/{end}/{indicator.item_code}"
+        )
+        response = client.get(url)
+        response.raise_for_status()
+        payload = response.json()
+        result = payload.get("StatisticSearch")
+        if not result:
+            message = payload.get("RESULT", {}).get("MESSAGE", "응답 없음")
+            raise RuntimeError(message)
+        rows = result.get("row") or result.get("list") or []
+        rows = sorted(rows, key=lambda row: row.get("TIME", ""))
+        return rows
+
+    def _to_macro_row(self, indicator: EcosIndicator, row: dict) -> dict:
+        return {
+            "indicator_id": indicator.indicator_id,
+            "indicator_name": indicator.indicator_name,
+            "date": _normalize_ecos_time(row.get("TIME", ""), indicator.cycle),
+            "value": _parse_number(row.get("DATA_VALUE", "")),
+            "unit": row.get("UNIT_NAME") or indicator.unit,
+            "frequency": indicator.frequency,
+            "country": indicator.country,
+            "source": self.source,
+            "created_at": _utc_now(),
+        }
 
 
 class NaverMarketIndexProvider:
@@ -170,3 +315,35 @@ def _utc_now() -> str:
 
 def _parse_number(value: str) -> float:
     return float(value.replace(",", "").strip())
+
+
+def _ecos_date_range(
+    cycle: str,
+    date_from: str | None,
+    date_to: str | None,
+) -> tuple[str, str]:
+    end = _parse_iso_date(date_to) or date.today()
+    if date_from:
+        start = _parse_iso_date(date_from) or end
+    elif cycle == "M":
+        start = end - timedelta(days=400)
+    else:
+        start = end - timedelta(days=45)
+
+    if cycle == "M":
+        return start.strftime("%Y%m"), end.strftime("%Y%m")
+    return start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
+
+
+def _parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def _normalize_ecos_time(value: str, cycle: str) -> str:
+    if not value:
+        return ""
+    if cycle == "M":
+        return datetime.strptime(value, "%Y%m").date().replace(day=1).isoformat()
+    return datetime.strptime(value, "%Y%m%d").date().isoformat()

@@ -83,6 +83,8 @@ class Settings:
     max_total_reports: int = _env_int("MAX_TOTAL_REPORTS", default=50)
     include_price_data: bool = _env_bool("INCLUDE_PRICE_DATA", False)
     include_macro_data: bool = _env_bool("INCLUDE_MACRO_DATA", False)
+    include_news_data: bool = _env_bool("INCLUDE_NEWS_DATA", False)
+    include_disclosure_data: bool = _env_bool("INCLUDE_DISCLOSURE_DATA", False)
     respect_robots_txt: bool = _env_bool("RESPECT_ROBOTS_TXT", True)
 
     schedule_hour: int = _env_int("CRAWLER_SCHEDULE_HOUR", "SCHEDULE_HOUR", default=7)
@@ -95,6 +97,11 @@ class Settings:
 
     price_data_provider: str = os.getenv("PRICE_DATA_PROVIDER", "naver")
     macro_data_provider: str = os.getenv("MACRO_DATA_PROVIDER", "naver")
+    news_data_provider: str = os.getenv("NEWS_DATA_PROVIDER", "naver")
+    disclosure_data_provider: str = os.getenv("DISCLOSURE_DATA_PROVIDER", "dart")
+    naver_client_id: str = os.getenv("NAVER_CLIENT_ID", "")
+    naver_client_secret: str = os.getenv("NAVER_CLIENT_SECRET", "")
+    dart_api_key: str = os.getenv("DART_API_KEY", "")
     ecos_api_key: str = os.getenv("ECOS_API_KEY", "")
     kis_app_key: str = os.getenv("KIS_APP_KEY", "")
     kis_app_secret: str = os.getenv("KIS_APP_SECRET", "")

@@ -87,6 +87,39 @@ CREATE TABLE IF NOT EXISTS macro_data (
     PRIMARY KEY (indicator_id, date, source)
 );
 
+CREATE TABLE IF NOT EXISTS news_metadata (
+    news_id TEXT PRIMARY KEY,
+    ticker TEXT NOT NULL DEFAULT '',
+    company TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    published_at TEXT NOT NULL DEFAULT '',
+    original_url TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    provider TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_metadata_ticker ON news_metadata(ticker);
+CREATE INDEX IF NOT EXISTS idx_news_metadata_published_at ON news_metadata(published_at);
+
+CREATE TABLE IF NOT EXISTS disclosure_metadata (
+    disclosure_id TEXT PRIMARY KEY,
+    ticker TEXT NOT NULL DEFAULT '',
+    company TEXT NOT NULL DEFAULT '',
+    corp_code TEXT NOT NULL DEFAULT '',
+    report_name TEXT NOT NULL DEFAULT '',
+    disclosure_type TEXT NOT NULL DEFAULT '',
+    disclosed_at TEXT NOT NULL DEFAULT '',
+    receipt_no TEXT NOT NULL DEFAULT '',
+    original_url TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_disclosure_metadata_ticker ON disclosure_metadata(ticker);
+CREATE INDEX IF NOT EXISTS idx_disclosure_metadata_disclosed_at ON disclosure_metadata(disclosed_at);
+
 CREATE TABLE IF NOT EXISTS crawler_runs (
     run_id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
@@ -99,5 +132,7 @@ CREATE TABLE IF NOT EXISTS crawler_runs (
     failed_count INTEGER NOT NULL DEFAULT 0,
     price_rows_count INTEGER NOT NULL DEFAULT 0,
     macro_rows_count INTEGER NOT NULL DEFAULT 0,
+    news_rows_count INTEGER NOT NULL DEFAULT 0,
+    disclosure_rows_count INTEGER NOT NULL DEFAULT 0,
     error_message TEXT NOT NULL DEFAULT ''
 );

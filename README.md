@@ -43,9 +43,16 @@ REQUEST_INTERVAL_SECONDS=1.5
 MAX_RETRIES=3
 
 PRICE_DATA_PROVIDER=naver
-MACRO_DATA_PROVIDER=naver
+MACRO_DATA_PROVIDER=ecos
+NEWS_DATA_PROVIDER=naver
+DISCLOSURE_DATA_PROVIDER=dart
 INCLUDE_PRICE_DATA=false
 INCLUDE_MACRO_DATA=false
+INCLUDE_NEWS_DATA=false
+INCLUDE_DISCLOSURE_DATA=false
+NAVER_CLIENT_ID=
+NAVER_CLIENT_SECRET=
+DART_API_KEY=
 
 CRAWLER_SCHEDULE_HOUR=7
 CRAWLER_SCHEDULE_MINUTE=0
@@ -73,7 +80,7 @@ python main.py --run-once --source all
 옵션 포함 실행:
 
 ```bash
-python main.py --run-once --source naver --months 6 --max-pages 3 --include-price-data --include-macro-data
+python main.py --run-once --source naver --months 6 --max-pages 3 --include-price-data --include-macro-data --include-news-data --include-disclosure-data
 ```
 
 스케줄 실행:
@@ -97,7 +104,7 @@ APScheduler가 `.env`의 `CRAWLER_SCHEDULE_HOUR`, `CRAWLER_SCHEDULE_MINUTE`, `SC
 9. PDF 다운로드, Content-Type/시그니처 검증, SHA-256 계산
 10. SHA-256 중복 검사
 11. `report_files` 저장 및 `report_metadata.status` 갱신
-12. 옵션에 따라 실제 provider의 주가/매크로 데이터 저장
+12. 옵션에 따라 실제 provider의 주가/매크로/뉴스/공시 데이터 저장
 13. `crawler_runs`에 실행 결과 저장
 
 ## 저장 구조
@@ -118,7 +125,9 @@ SQLite 테이블:
 - `report_files`: PDF 파일 경로, URL, SHA-256, Content-Type, 유효성
 - `target_price_data`: HTML에서 명시적으로 확인 가능한 목표주가/투자의견
 - `price_data`: Naver Finance 또는 선택 provider 기반 주가 데이터
-- `macro_data`: Naver 시장지표 또는 선택 provider 기반 매크로 데이터
+- `macro_data`: ECOS/Naver 시장지표 또는 선택 provider 기반 매크로 데이터
+- `news_metadata`: Naver Search API 기반 뉴스 메타데이터
+- `disclosure_metadata`: OpenDART 기반 공시 메타데이터
 - `crawler_runs`: 실행 단위 집계와 실패 사유
 
 상태값:
@@ -154,7 +163,8 @@ unknown
 기본값은 실제 수집 provider입니다.
 
 - `PRICE_DATA_PROVIDER=naver`: Naver Finance 일별 시세를 수집해 `price_data`에 저장
-- `MACRO_DATA_PROVIDER=naver`: Naver 시장지표에서 USD/KRW를 수집해 `macro_data`에 저장
+- `MACRO_DATA_PROVIDER=ecos`: 한국은행 ECOS에서 기준금리, 국고채 금리, CPI를 수집하고 Naver 시장지표에서 USD/KRW를 함께 저장
+- `MACRO_DATA_PROVIDER=naver`: Naver 시장지표에서 USD/KRW만 수집
 
 실제 수치 데이터까지 포함해 실행:
 
@@ -162,8 +172,21 @@ unknown
 python main.py --run-once --source naver --include-price-data --include-macro-data
 ```
 
-네트워크가 없는 테스트 환경에서는 `.env`에서 `PRICE_DATA_PROVIDER=mock`,
-`MACRO_DATA_PROVIDER=mock`으로 바꿀 수 있습니다. 추후 한국투자 Open API, ECOS API 구현체로 교체할 수 있도록 `collectors/`에 provider 경계를 두었습니다.
+ECOS 수집에는 `ECOS_API_KEY`가 필요합니다. 네트워크가 없는 테스트 환경에서는 `.env`에서 `PRICE_DATA_PROVIDER=mock`,
+`MACRO_DATA_PROVIDER=mock`으로 바꿀 수 있습니다. 추후 한국투자 Open API 같은 provider로 교체할 수 있도록 `collectors/`에 provider 경계를 두었습니다.
+
+## 뉴스 / 공시 Provider
+
+- `NEWS_DATA_PROVIDER=naver`: Naver Search API로 뉴스를 수집해 `news_metadata`에 저장
+- `DISCLOSURE_DATA_PROVIDER=dart`: OpenDART API로 공시를 수집해 `disclosure_metadata`에 저장
+
+뉴스 수집에는 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`이 필요합니다.
+공시 수집에는 `DART_API_KEY`가 필요합니다.
+키가 비어 있으면 해당 수집은 skip되고 파이프라인은 계속 진행됩니다.
+
+```bash
+python main.py --run-once --source naver --include-news-data --include-disclosure-data
+```
 
 ## 로그
 
@@ -173,7 +196,7 @@ python main.py --run-once --source naver --include-price-data --include-macro-da
 - 기업별 발견 리포트 수
 - 총 발견 리포트 수
 - 다운로드 성공, 중복, 실패 수
-- target/price/macro 저장 수
+- target/price/macro/news/disclosure 저장 수
 - 실패 사유와 PDF 저장 경로
 
 ## 테스트
@@ -182,4 +205,4 @@ python main.py --run-once --source naver --include-price-data --include-macro-da
 python -m unittest discover -v
 ```
 
-테스트 범위는 company resolver, report type 정규화, report_id 생성, SHA-256/PDF 검증, 중복 검사, target price 저장 조건, price/macro provider 파서를 포함합니다.
+테스트 범위는 company resolver, report type 정규화, report_id 생성, SHA-256/PDF 검증, 중복 검사, target price 저장 조건, price/macro/news/disclosure provider를 포함합니다.

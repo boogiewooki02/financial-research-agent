@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Iterable
 
 from collectors.macro_data_collector import MacroDataCollector
+from collectors.news_collector import NewsCollector
 from collectors.price_data_collector import PriceDataCollector
+from collectors.disclosure_collector import DisclosureCollector
 from config.report_type_codes import normalize_report_type
 from config.settings import PROJECT_ROOT, Settings
 from config.supported_companies import SUPPORTED_COMPANIES, resolve_company_from_text
@@ -43,6 +45,8 @@ class CollectionPipeline:
             "failed": 0,
             "price_rows": 0,
             "macro_rows": 0,
+            "news_rows": 0,
+            "disclosure_rows": 0,
             "target_rows": 0,
         }
         logger.info("수집 시작: source=%s", source)
@@ -53,11 +57,12 @@ class CollectionPipeline:
             counts["total_found"] = len(scoped_reports)
             self._process_reports(scoped_reports, counts)
             self._collect_numeric_data(counts)
+            self._collect_news_and_disclosures(counts)
             status = "partial" if counts["failed"] else "success"
             self.runs.finish_run(run_id, counts, status)
             logger.info(
                 "수집 종료: source=%s found=%s downloaded=%s duplicate=%s failed=%s "
-                "target=%s price_rows=%s macro_rows=%s",
+                "target=%s price_rows=%s macro_rows=%s news_rows=%s disclosure_rows=%s",
                 source,
                 counts["total_found"],
                 counts["downloaded"],
@@ -66,6 +71,8 @@ class CollectionPipeline:
                 counts["target_rows"],
                 counts["price_rows"],
                 counts["macro_rows"],
+                counts["news_rows"],
+                counts["disclosure_rows"],
             )
             return counts
         except Exception as exc:
@@ -216,6 +223,31 @@ class CollectionPipeline:
                 counts["macro_rows"] += self.numeric_data.upsert_macro_rows(rows)
             except Exception as exc:
                 logger.warning("매크로 데이터 수집 실패: %s", exc)
+
+    def _collect_news_and_disclosures(self, counts: dict[str, int]) -> None:
+        if self.settings.include_news_data:
+            collector = NewsCollector(self.settings)
+            for company in SUPPORTED_COMPANIES:
+                try:
+                    rows = collector.collect_news_data(
+                        company["ticker"],
+                        company["company"],
+                    )
+                    counts["news_rows"] += self.numeric_data.upsert_news_rows(rows)
+                except Exception as exc:
+                    logger.warning("뉴스 데이터 수집 실패: %s - %s", company["ticker"], exc)
+
+        if self.settings.include_disclosure_data:
+            collector = DisclosureCollector(self.settings)
+            for company in SUPPORTED_COMPANIES:
+                try:
+                    rows = collector.collect_disclosure_data(
+                        company["ticker"],
+                        company["company"],
+                    )
+                    counts["disclosure_rows"] += self.numeric_data.upsert_disclosure_rows(rows)
+                except Exception as exc:
+                    logger.warning("공시 데이터 수집 실패: %s - %s", company["ticker"], exc)
 
     def _limit_collection_scope(
         self,

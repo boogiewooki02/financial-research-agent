@@ -36,6 +36,7 @@ def configure_logging(settings: Settings) -> None:
         handlers=[console_handler, file_handler],
         force=True,
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,6 +87,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="설정된 provider 기준 매크로 데이터도 수집",
     )
+    parser.add_argument(
+        "--include-news-data",
+        action="store_true",
+        help="설정된 provider 기준 뉴스 데이터도 수집",
+    )
+    parser.add_argument(
+        "--include-disclosure-data",
+        action="store_true",
+        help="설정된 provider 기준 공시 데이터도 수집",
+    )
     return parser.parse_args()
 
 
@@ -112,6 +123,10 @@ def apply_cli_overrides(settings: Settings, args: argparse.Namespace) -> Setting
         overrides["include_price_data"] = True
     if args.include_macro_data:
         overrides["include_macro_data"] = True
+    if args.include_news_data:
+        overrides["include_news_data"] = True
+    if args.include_disclosure_data:
+        overrides["include_disclosure_data"] = True
     return replace(settings, **overrides) if overrides else settings
 
 

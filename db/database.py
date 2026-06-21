@@ -30,6 +30,34 @@ class Database:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             connection.executescript(self.schema_path.read_text(encoding="utf-8"))
+            self._ensure_column(
+                connection,
+                "crawler_runs",
+                "news_rows_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                connection,
+                "crawler_runs",
+                "disclosure_rows_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+
+    @staticmethod
+    def _ensure_column(
+        connection: sqlite3.Connection,
+        table_name: str,
+        column_name: str,
+        column_definition: str,
+    ) -> None:
+        columns = {
+            row["name"]
+            for row in connection.execute(f"PRAGMA table_info({table_name})")
+        }
+        if column_name not in columns:
+            connection.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+            )
 
     def get_row(self, table: str, key_column: str, key_value: str) -> dict[str, Any] | None:
         with self.connect() as connection:

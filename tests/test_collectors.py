@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from collectors.macro_data_collector import MacroDataCollector, NaverMarketIndexProvider
+from collectors.disclosure_collector import DisclosureCollector
+from collectors.macro_data_collector import (
+    DEFAULT_ECOS_INDICATORS,
+    EcosMacroProvider,
+    MacroDataCollector,
+    NaverMarketIndexProvider,
+)
+from collectors.news_collector import NewsCollector, _clean_html, _normalize_pub_date
 from collectors.price_data_collector import NaverPriceProvider, PriceDataCollector
 from config.settings import Settings
 
@@ -56,6 +63,44 @@ class MacroDataCollectorTest(unittest.TestCase):
         value = NaverMarketIndexProvider(Settings())._parse_usd_krw(html)
 
         self.assertEqual(value, 1380.5)
+
+    def test_ecos_provider_converts_indicator_row(self) -> None:
+        provider = EcosMacroProvider(Settings(macro_data_provider="ecos"))
+        row = provider._to_macro_row(
+            DEFAULT_ECOS_INDICATORS["BASE_RATE_KR"],
+            {"TIME": "20260618", "DATA_VALUE": "2.50", "UNIT_NAME": "%"},
+        )
+
+        self.assertEqual(row["indicator_id"], "BASE_RATE_KR")
+        self.assertEqual(row["date"], "2026-06-18")
+        self.assertEqual(row["value"], 2.5)
+        self.assertEqual(row["source"], "ECOS")
+
+
+class NewsCollectorTest(unittest.TestCase):
+    def test_skip_without_naver_api_keys(self) -> None:
+        rows = NewsCollector(
+            Settings(naver_client_id="", naver_client_secret="")
+        ).collect_news_data("005930", "삼성전자")
+
+        self.assertEqual(rows, [])
+
+    def test_news_helpers_normalize_values(self) -> None:
+        self.assertEqual(_clean_html("<b>삼성전자</b> 뉴스"), "삼성전자 뉴스")
+        self.assertTrue(
+            _normalize_pub_date("Thu, 18 Jun 2026 09:00:00 +0900").startswith(
+                "2026-06-18T00:00:00"
+            )
+        )
+
+
+class DisclosureCollectorTest(unittest.TestCase):
+    def test_skip_without_dart_api_key(self) -> None:
+        rows = DisclosureCollector(
+            Settings(dart_api_key="")
+        ).collect_disclosure_data("005930", "삼성전자")
+
+        self.assertEqual(rows, [])
 
 
 if __name__ == "__main__":
