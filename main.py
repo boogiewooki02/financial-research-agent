@@ -57,7 +57,7 @@ def parse_args() -> argparse.Namespace:
         "--months",
         type=_positive_int,
         default=None,
-        help="오늘 기준 최근 N개월 리포트만 수집",
+        help="오늘 기준 최근 N개월 리포트 및 주가 데이터 수집",
     )
     parser.add_argument(
         "--max-reports-per-company",

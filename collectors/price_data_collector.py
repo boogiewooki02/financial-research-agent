@@ -4,12 +4,14 @@ import logging
 import math
 import time
 from datetime import date, datetime, timedelta, timezone
+from itertools import count
 from statistics import pstdev
 
 import httpx
 from bs4 import BeautifulSoup
 
 from config.settings import SETTINGS, Settings
+from crawler.base_crawler import subtract_months
 from crawler.http import create_ssl_context
 
 logger = logging.getLogger(__name__)
@@ -26,14 +28,23 @@ class PriceDataCollector:
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> list[dict]:
+        end = _parse_date(date_to) or date.today()
+        start = _parse_date(date_from) or subtract_months(end, self.settings.months)
+        resolved_date_from = start.isoformat()
+        resolved_date_to = end.isoformat()
         if self.settings.price_data_provider == "mock":
-            return MockPriceProvider().collect(ticker, company, date_from, date_to)
+            return MockPriceProvider().collect(
+                ticker,
+                company,
+                resolved_date_from,
+                resolved_date_to,
+            )
         if self.settings.price_data_provider == "naver":
             return NaverPriceProvider(self.settings).collect(
                 ticker,
                 company,
-                date_from,
-                date_to,
+                resolved_date_from,
+                resolved_date_to,
             )
         raise ValueError(f"unsupported price data provider: {self.settings.price_data_provider}")
 
@@ -60,7 +71,7 @@ class NaverPriceProvider:
             follow_redirects=True,
             verify=create_ssl_context(),
         ) as client:
-            for page in range(1, self.settings.max_pages + 1):
+            for page in count(1):
                 url = (
                     "https://finance.naver.com/item/sise_day.naver"
                     f"?code={ticker}&page={page}"
@@ -68,12 +79,14 @@ class NaverPriceProvider:
                 response = client.get(url)
                 response.raise_for_status()
                 parsed_rows = self._parse_page(response.text, ticker, company)
+                if not parsed_rows:
+                    break
                 rows.extend(
                     row
                     for row in parsed_rows
                     if start <= _parse_date(row["price_date"]) <= end
                 )
-                if parsed_rows and min(_parse_date(row["price_date"]) for row in parsed_rows) < start:
+                if min(_parse_date(row["price_date"]) for row in parsed_rows) <= start:
                     break
                 time.sleep(self.settings.request_delay_seconds)
 

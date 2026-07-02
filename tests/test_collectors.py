@@ -32,6 +32,18 @@ class PriceDataCollectorTest(unittest.TestCase):
         self.assertEqual(rows[0]["ticker"], "005930")
         self.assertEqual(rows[0]["source"], "MOCK")
 
+    def test_months_setting_defines_default_price_period(self) -> None:
+        rows = PriceDataCollector(
+            Settings(price_data_provider="mock", months=2)
+        ).collect_price_data(
+            "005930",
+            "삼성전자",
+            date_to="2026-06-18",
+        )
+
+        self.assertEqual(rows[0]["price_date"], "2026-04-18")
+        self.assertEqual(rows[-1]["price_date"], "2026-06-18")
+
     def test_naver_price_provider_parses_daily_price_rows(self) -> None:
         html = """
         <table class="type2"><tr>
